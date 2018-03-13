@@ -109,7 +109,7 @@ namespace zed_wrapper {
         ros::Publisher pub_right_cam_info_raw;
         ros::Publisher pub_depth_cam_info;
         ros::Publisher pub_odom;
-        ros::Publisher pub_map;
+        ros::Publisher pub_mesh;
 
         // tf
         tf2_ros::TransformBroadcaster transform_odom_broadcaster;
@@ -119,7 +119,6 @@ namespace zed_wrapper {
         std::string depth_frame_id;
         std::string cloud_frame_id;
         std::string odometry_frame_id;
-        std::string mesh_frame_id;
         std::string base_frame_id;
         std::string camera_frame_id;
         // initialization Transform listener
@@ -167,7 +166,7 @@ namespace zed_wrapper {
 
         // Mesh map variables
         sl::Mesh mesh;
-        pcl::PointCloud<PointXYZ> mapCloud;
+        pcl::PointCloud<pcl::PointXYZ> mapCloud;
         string mesh_frame_id = "";
         ros::Time mesh_time;
 
@@ -344,7 +343,7 @@ namespace zed_wrapper {
             output.width = point_cloud.width;
             output.is_bigendian = false;
             output.is_dense = false;
-            pub_map.publish(output);
+            pub_mesh.publish(output);
         }
 
         /* \brief Publish the pose of the camera as a transformation
@@ -593,7 +592,7 @@ namespace zed_wrapper {
                 int depth_SubNumber = pub_depth.getNumSubscribers();
                 int cloud_SubNumber = pub_cloud.getNumSubscribers();
                 int odom_SubNumber = pub_odom.getNumSubscribers();
-                int mesh_SubNumbder = pub_mesh.getNumSubscribers();
+                int mesh_SubNumber = pub_mesh.getNumSubscribers();
                 bool runLoop = (rgb_SubNumber + rgb_raw_SubNumber + left_SubNumber + left_raw_SubNumber + right_SubNumber + right_raw_SubNumber + depth_SubNumber + cloud_SubNumber + odom_SubNumber + mesh_SubNumber) > 0;
 
                 runParams.enable_point_cloud = false;
@@ -795,7 +794,7 @@ namespace zed_wrapper {
                     }
 
                     if (mesh_SubNumber > 0) {
-                        if (zed.getMeshRequestStatusAsync() == SUCCESS && meshTimer > 0) {
+                        if (zed.getMeshRequestStatusAsync() == sl::SUCCESS && meshTimer > 0) {
                             zed.retrieveMeshAsync(mesh);
                             mesh.filter(filter_params, true);
                             mesh_time = t;
@@ -988,11 +987,11 @@ namespace zed_wrapper {
 
             serial_number = zed.getCameraInformation().serial_number;
 
-            mapping_param.resolution_meter = sl::SpatialMappingParameters::get(MAPPING_RESOLUTION_LOW);
-            mapping_param.range_meter = sl::SpatialMappingParameters::get(MAPPING_RANGE_MEDIUM);
+            mapping_param.resolution_meter = sl::SpatialMappingParameters::get(sl::SpatialMappingParameters::MAPPING_RESOLUTION_LOW);
+            mapping_param.range_meter = sl::SpatialMappingParameters::get(sl::SpatialMappingParameters::MAPPING_RANGE_MEDIUM);
             mapping_param.max_memory_usage = 512;
-            mapping_params.save_texture = false;
-            mapping_params.use_chunk_only = true;
+            mapping_param.save_texture = false;
+            mapping_param.use_chunk_only = true;
             filter_params.set(sl::MeshFilterParameters::MESH_FILTER_LOW);
 
             //Reconfigure parameters
