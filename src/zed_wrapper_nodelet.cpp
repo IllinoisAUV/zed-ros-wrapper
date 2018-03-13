@@ -109,6 +109,7 @@ namespace zed_wrapper {
         ros::Publisher pub_right_cam_info_raw;
         ros::Publisher pub_depth_cam_info;
         ros::Publisher pub_odom;
+        ros::Publisher pub_map;
 
         // tf
         tf2_ros::TransformBroadcaster transform_odom_broadcaster;
@@ -118,6 +119,7 @@ namespace zed_wrapper {
         std::string depth_frame_id;
         std::string cloud_frame_id;
         std::string odometry_frame_id;
+        std::string mesh_frame_id;
         std::string base_frame_id;
         std::string camera_frame_id;
         // initialization Transform listener
@@ -142,6 +144,8 @@ namespace zed_wrapper {
 
         // zed object
         sl::InitParameters param;
+        sl::SpatialMappingParameters mapping_param;
+        sl::MeshFilterParameters filter_params;
         sl::Camera zed;
         unsigned int serial_number;
 
@@ -154,11 +158,18 @@ namespace zed_wrapper {
         bool computeDepth;
         bool grabbing = false;
         int openniDepthMode = 0; // 16 bit UC data in mm else 32F in m, for more info http://www.ros.org/reps/rep-0118.html
+        int meshTimer = 0;
 
         // Point cloud variables
         sl::Mat cloud;
         string point_cloud_frame_id = "";
         ros::Time point_cloud_time;
+
+        // Mesh map variables
+        sl::Mesh mesh;
+        pcl::PointCloud<PointXYZ> mapCloud;
+        string mesh_frame_id = "";
+        ros::Time mesh_time;
 
         ~ZEDWrapperNodelet() {
             device_poll_thread.get()->join();
@@ -310,6 +321,30 @@ namespace zed_wrapper {
             odom.pose.pose.orientation.w = base2.rotation.w;
             // Publish odometry message
             pub_odom.publish(odom);
+        }
+
+        void publishMesh(sl::Mesh &mesh) {
+            pcl::PointCloud<pcl::PointXYZ> point_cloud;
+
+            int size = mesh.vertices.size();
+            point_cloud.points.resize(size);
+
+            point_cloud.width = mesh.vertices.size();
+            point_cloud.height = 1; // Unorganized PointCloud
+            for(unsigned int i = 0; i < mesh.vertices.size(); i++) {
+                point_cloud.points[i] = pcl::PointXYZ(mesh.vertices[i][0], mesh.vertices[i][1], mesh.vertices[i][2]);
+            }
+            sensor_msgs::PointCloud2 msg;
+
+            sensor_msgs::PointCloud2 output;
+            pcl::toROSMsg(point_cloud, output); // Convert the point cloud to a ROS message
+            output.header.frame_id = mesh_frame_id; // Set the header values of the ROS message
+            output.header.stamp = mesh_time;
+            output.height = point_cloud.height;
+            output.width = point_cloud.width;
+            output.is_bigendian = false;
+            output.is_dense = false;
+            pub_map.publish(output);
         }
 
         /* \brief Publish the pose of the camera as a transformation
@@ -558,7 +593,8 @@ namespace zed_wrapper {
                 int depth_SubNumber = pub_depth.getNumSubscribers();
                 int cloud_SubNumber = pub_cloud.getNumSubscribers();
                 int odom_SubNumber = pub_odom.getNumSubscribers();
-                bool runLoop = (rgb_SubNumber + rgb_raw_SubNumber + left_SubNumber + left_raw_SubNumber + right_SubNumber + right_raw_SubNumber + depth_SubNumber + cloud_SubNumber + odom_SubNumber) > 0;
+                int mesh_SubNumbder = pub_mesh.getNumSubscribers();
+                bool runLoop = (rgb_SubNumber + rgb_raw_SubNumber + left_SubNumber + left_raw_SubNumber + right_SubNumber + right_raw_SubNumber + depth_SubNumber + cloud_SubNumber + odom_SubNumber + mesh_SubNumber) > 0;
 
                 runParams.enable_point_cloud = false;
                 if (cloud_SubNumber > 0)
@@ -576,6 +612,7 @@ namespace zed_wrapper {
                         zed.disableTracking();
                         tracking_activated = false;
                     }
+
                     computeDepth = (depth_SubNumber + cloud_SubNumber + odom_SubNumber) > 0; // Detect if one of the subscriber need to have the depth information
                     ros::Time t = ros::Time::now(); // Get current time
 
@@ -629,6 +666,11 @@ namespace zed_wrapper {
                     }
 
                     old_t = ros::Time::now();
+
+                    // Request the mesh asynchronously
+                    if((mesh_SubNumber > 0) && (meshTimer % rate == 0)) {
+                        zed.requestMeshAsync();
+                    }
 
                     if (autoExposure) {
                         // getCameraSettings() can't check status of auto exposure
@@ -752,6 +794,16 @@ namespace zed_wrapper {
                         publishOdom(base_transform, pub_odom, odometry_frame_id, t);
                     }
 
+                    if (mesh_SubNumber > 0) {
+                        if (zed.getMeshRequestStatusAsync() == SUCCESS && meshTimer > 0) {
+                            zed.retrieveMeshAsync(mesh);
+                            mesh.filter(filter_params, true);
+                            mesh_time = t;
+                            publishMesh(mesh);
+                        }
+                    }
+                    meshTimer++;
+
                     // Publish odometry tf only if enabled
                     if (publish_tf) {
                         //Note, the frame is published, but its values will only change if someone has subscribed to odom
@@ -858,6 +910,10 @@ namespace zed_wrapper {
 
             string odometry_topic = "odom";
 
+            string map_topic = "map";
+            mesh_frame_id = camera_frame_id;
+            
+
             nh_ns.getParam("rgb_topic", rgb_topic);
             nh_ns.getParam("rgb_raw_topic", rgb_raw_topic);
             nh_ns.getParam("rgb_cam_info_topic", rgb_cam_info_topic);
@@ -879,6 +935,8 @@ namespace zed_wrapper {
             nh_ns.getParam("point_cloud_topic", point_cloud_topic);
 
             nh_ns.getParam("odometry_topic", odometry_topic);
+
+            nh_ns.getParam("map_topic", map_topic);
 
             nh_ns.param<std::string>("svo_filepath", svo_filepath, std::string());
 
@@ -929,6 +987,13 @@ namespace zed_wrapper {
             }
 
             serial_number = zed.getCameraInformation().serial_number;
+
+            mapping_param.resolution_meter = sl::SpatialMappingParameters::get(MAPPING_RESOLUTION_LOW);
+            mapping_param.range_meter = sl::SpatialMappingParameters::get(MAPPING_RANGE_MEDIUM);
+            mapping_param.max_memory_usage = 512;
+            mapping_params.save_texture = false;
+            mapping_params.use_chunk_only = true;
+            filter_params.set(sl::MeshFilterParameters::MESH_FILTER_LOW);
 
             //Reconfigure parameters
             server = boost::make_shared<dynamic_reconfigure::Server < zed_wrapper::ZedConfig >> ();
@@ -985,6 +1050,10 @@ namespace zed_wrapper {
             //Odometry publisher
             pub_odom = nh.advertise<nav_msgs::Odometry>(odometry_topic, 1);
             NODELET_INFO_STREAM("Advertized on topic " << odometry_topic);
+
+            // Mesh publisher
+            pub_odom = nh.advertise<sensor_msgs::PointCloud2>(map_topic, 1);
+            NODELET_INFO_STREAM("Advertized on topic " << map_topic);
 
             device_poll_thread = boost::shared_ptr<boost::thread> (new boost::thread(boost::bind(&ZEDWrapperNodelet::device_poll, this)));
         }
