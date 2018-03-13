@@ -911,7 +911,7 @@ namespace zed_wrapper {
 
             string map_topic = "map";
             mesh_frame_id = camera_frame_id;
-            
+
 
             nh_ns.getParam("rgb_topic", rgb_topic);
             nh_ns.getParam("rgb_raw_topic", rgb_raw_topic);
