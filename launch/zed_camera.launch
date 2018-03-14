@@ -33,6 +33,19 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <arg name="depth_frame"           default="zed_depth_camera" />
     <!-- Publish urdf zed -->
     <arg name="publish_urdf"          default="true" />
+
+    <param name="resolution"          default="2" />
+    <param name="quality"             default="1" />
+    <param name="sensing_mode"        default="0" />
+    <param name="frame_rate"          default="60" />
+    <param name="odometry_db"         default="" />
+    <param name="openni_depth_mode"   default="0" />
+    <param name="gpu_id"              default="$(arg gpu_id)" />
+    <param name="confidence"          default="100" />
+    <param name="gain"                default="100" />
+    <param name="exposure"            default="100" />
+    <param name="auto_exposure"       default="true" />
+    <param name="depth_stabilization" default="1" />
     
     <node name="zed_wrapper_node" pkg="zed_wrapper" type="zed_wrapper_node" output="screen" required="true"><!-- launch-prefix="valgrind" --> 
 
@@ -50,20 +63,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
         <!-- ZED parameters -->
         <param name="zed_id"                value="$(arg zed_id)" />
-        <param name="serial_number"      value="$(arg serial_number)" />
+        <param name="serial_number"         value="$(arg serial_number)" />
 
-        <param name="resolution"            value="2" />
-        <param name="quality"               value="1" />
-        <param name="sensing_mode"          value="0" />
-        <param name="frame_rate"            value="60" />
-        <param name="odometry_db"           value="" />
-        <param name="openni_depth_mode"     value="0" />
+        <param name="resolution"            value="$(arg resolution)" />
+        <param name="quality"               value="$(arg quality)" />
+        <param name="sensing_mode"          value="$(arg sensing_mode)" />
+        <param name="frame_rate"            value="$(arg frame_rate)" />
+        <param name="odometry_db"           value="$(arg odometry_db)" />
+        <param name="openni_depth_mode"     value="$(arg openni_depth_mode)" />
         <param name="gpu_id"                value="$(arg gpu_id)" />
-        <param name="confidence"            value="100" />
-        <param name="gain"                  value="100" />
-        <param name="exposure"              value="100" />
-        <param name="auto_exposure"         value="true" />
-        <param name="depth_stabilization"   value="1" />
+        <param name="confidence"            value="$(arg confidence)" />
+        <param name="gain"                  value="$(arg gain)" />
+        <param name="exposure"              value="$(arg exposure)" />
+        <param name="auto_exposure"         value="$(arg autoexposure)" />
+        <param name="depth_stabilization"   value="$(arg depth_stabilization)" />
 
         <!-- ROS topic names -->
         <param name="rgb_topic"             value="rgb/image_rect_color" />
